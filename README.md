@@ -28,6 +28,16 @@ Since we have prepare the data, `$ ./FaceAlignment prepare` will generate two te
 
 `$ ./FaceAlignment train` will start training and result will be lied in the directory `model`. `$ ./FaceAlignment test` will test the model on test data. If you have a Desktop Environment on the Linux, `$ ./FaceAlignment run` will do the prediction over test data by presenting a window to show the result.
 
+Train MSE :
+stage 1 0.193225
+
+stage 2 0.142991
+
+stage 3 0.12109
+
+stage 4 0.109517
+
+stage 5 0.1022
 ### Tuning
 
 The Configure is under `src/lbf/common.cpp/Config::Config`, modify the config under your own condition.
@@ -36,6 +46,12 @@ The Configure is under `src/lbf/common.cpp/Config::Config`, modify the config un
 
 The relative path used in source code are all start from `../build`, you may change this under your own condition.
 
+### Face Detect
+    total image 3837 train 3464 test 373
+    
+    mtcnn:image  3831 train 3458 test 373 minSize 40
+
+    opencv:image 3541 train 3174 test 367 minSize 30
 ### Pre-trained Model
 
 I will not provide a pre-trained model, please train the code on your own data.

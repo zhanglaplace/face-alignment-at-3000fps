@@ -1,15 +1,113 @@
 #include "lbf/lbf.hpp"
-
+#include "lbf/mtcnn.h"
 #include <cstdio>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
-
+#include <opencv2/opencv.hpp>
 using namespace cv;
 using namespace std;
 using namespace lbf;
 
 // dirty but works
 void parseTxt(string &txt, vector<Mat> &imgs, vector<Mat> &gt_shapes, vector<BBox> &bboxes);
+
+int runVideo(int key){
+	
+	VideoCapture capture(0);
+    if(!capture.isOpened()){
+        std::cout<<"open camera failed\n";
+        return -1;
+    }
+    Mat frame;
+    Config &config = Config::GetInstance();
+    int N;
+    int landmark_n = config.landmark_n;
+    char img_path[256];
+    double bbox[4];
+    vector<double> x(landmark_n), y(landmark_n);
+    LbfCascador lbf_cascador;
+    FILE *model = fopen(config.saved_file_name.c_str(), "rb");
+    lbf_cascador.Read(model);
+    fclose(model);
+    MTCNN det("../model");
+	float factor =0.709f;
+	float threshold[3]={0.7f,0.6f,0.6f};
+	int minSize = 40;
+	
+    while(true){
+        capture >>frame;
+        if(frame.empty()){
+            continue;
+        }
+        vector<FaceInfo> faceInfo = det.Detect(frame, minSize, threshold, factor, 3);
+        if (faceInfo.size() == 0) 
+            continue;
+        for(int i = 0 ; i < faceInfo.size();++i){
+			int x = (int)faceInfo[i].bbox.xmin;
+			int y = (int)faceInfo[i].bbox.ymin;
+			int w = (int)(faceInfo[i].bbox.xmax - faceInfo[i].bbox.xmin + 1);
+			int h = (int)(faceInfo[i].bbox.ymax - faceInfo[i].bbox.ymin + 1);
+			Rect r = Rect(x, y, w,h); // 人脸检测的框
+            Mat frame = frame(r).clone();
+            Mat gray;
+            cvtColor(frame, gray, CV_BGR2GRAY);
+            BBox tmp(r.x,r.y,r.width,r.height);
+            Mat shape = lbf_cascador.Predict(gray, tmp);
+            frame = drawShapeInImage(frame,shape,tmp);
+            imshow("landmark",frame);
+            if( 27 == waitKey(1)){
+                break;
+            }
+        }
+    }
+	return -1;
+}
+
+int runVideo(void){
+    VideoCapture capture(0);
+    if(!capture.isOpened()){
+        std::cout<<"open camera failed\n";
+        return -1;
+    }
+    Mat frame;
+    Config &config = Config::GetInstance();
+    int N;
+    int landmark_n = config.landmark_n;
+    char img_path[256];
+    double bbox[4];
+    vector<double> x(landmark_n), y(landmark_n);
+
+    LbfCascador lbf_cascador;
+    FILE *model = fopen(config.saved_file_name.c_str(), "rb");
+    lbf_cascador.Read(model);
+    fclose(model);
+    CascadeClassifier cc("../model/haarcascade_frontalface_alt.xml");
+    while(true){
+        capture >>frame;
+        if(frame.empty()){
+            continue;
+        }
+         vector<Rect> rects;
+        cc.detectMultiScale(frame, rects, 1.05, 2, CV_HAAR_SCALE_IMAGE, Size(30, 30));
+        if (rects.size() == 0) 
+            continue;
+        for(int i = 0 ; i < rects.size();++i){
+            Rect r = rects[i];
+            Mat frame = frame(r).clone();
+            Mat gray;
+            cvtColor(frame, gray, CV_BGR2GRAY);
+            BBox tmp(r.x,r.y,r.width,r.height);
+            Mat shape = lbf_cascador.Predict(gray, tmp);
+            frame = drawShapeInImage(frame,shape,tmp);
+            imshow("landmark",frame);
+            if( 27 == waitKey(1)){
+                break;
+            }
+        }
+    }
+    return 1;
+}
+
 
 int test(void) {
     Config &config = Config::GetInstance();
@@ -19,7 +117,7 @@ int test(void) {
     lbf_cascador.Read(fd);
     fclose(fd);
 
-    LOG("Load test data from %s", config.dataset.c_str());
+    //LOG("Load test data from %s", config.dataset.c_str());
     string txt = config.dataset + "/test.txt";
     vector<Mat> imgs, gt_shapes;
     vector<BBox> bboxes;
@@ -75,7 +173,7 @@ int run(void) {
 
         Mat gray;
         cvtColor(img, gray, CV_BGR2GRAY);
-        LOG("Run %s", img_path);
+       // LOG("Run %s", img_path);
         Mat shape = lbf_cascador.Predict(gray, bbox_);
         img = drawShapeInImage(img, shape, bbox_);
         imshow("landmark", img);

@@ -2,16 +2,58 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/objdetect/objdetect.hpp>
 #include "lbf/common.hpp"
-
+#include "lbf/mtcnn.h"
 using namespace cv;
 using namespace std;
 using namespace lbf;
-
+const int landmark_n = 68;
+MTCNN detector("../model");
 CascadeClassifier cc("../model/haarcascade_frontalface_alt.xml");
+float factor =0.709f;
+float thresholds[3]={0.7f,0.6f,0.6f};
+int minSize = 40;
+
+
+cv::Rect getBBox(Mat& img,vector<FaceInfo>& faceInfo,Mat_<double> &shape){
+	vector<Rect> rects;
+	if (faceInfo.size() == 0) return Rect(-1, -1, -1, -1);
+	double center_x, center_y, x_min, x_max, y_min, y_max;
+	center_x = center_y = 0;
+	 x_min = x_max = shape(0, 0);
+    y_min = y_max = shape(0, 1);
+    for (int i = 0; i < shape.rows; i++) {
+        center_x += shape(i, 0);
+        center_y += shape(i, 1);
+        x_min = min(x_min, shape(i, 0));
+        x_max = max(x_max, shape(i, 0));
+        y_min = min(y_min, shape(i, 1));
+        y_max = max(y_max, shape(i, 1));
+    }
+	center_x /= landmark_n;
+	center_y /= landmark_n;
+
+	for (int i = 0; i < faceInfo.size(); i++) {
+		int x = (int)faceInfo[i].bbox.xmin;
+		int y = (int)faceInfo[i].bbox.ymin;
+		int w = (int)(faceInfo[i].bbox.xmax - faceInfo[i].bbox.xmin + 1);
+		int h = (int)(faceInfo[i].bbox.ymax - faceInfo[i].bbox.ymin + 1);
+		Rect r = Rect(x, y, w,h); // 人脸检测的框
+
+		//shape超出了目标 或者对人脸问题
+		if (x_max - x_min > r.width*1.5) continue; 
+		if (y_max - y_min > r.height*1.5) continue;
+		if (abs(center_x - (r.x + r.width / 2)) > r.width / 2) continue;
+		if (abs(center_y - (r.y + r.height / 2)) > r.height / 2) continue;
+		return r; // 一个pts只对应一个人脸
+	}
+	return Rect(-1, -1, -1, -1);
+}
+
 
 Rect getBBox(Mat &img, Mat_<double> &shape) {
     vector<Rect> rects;
     cc.detectMultiScale(img, rects, 1.05, 2, CV_HAAR_SCALE_IMAGE, Size(30, 30));
+
     if (rects.size() == 0) return Rect(-1, -1, -1, -1);
     double center_x, center_y, x_min, x_max, y_min, y_max;
     center_x = center_y = 0;
@@ -55,8 +97,8 @@ void genTxt(const string &inTxt, const string &outTxt) {
     while (fgets(line, sizeof(line), inFile)) {
         string img_path(line, strlen(line) - 1);
 
-        LOG("Handle %s", img_path.c_str());
-
+        // LOG("Handle %s", img_path.c_str());
+        std::cout<<"Handle "<<img_path<<std::endl;
         string pts = img_path.substr(0, img_path.find_last_of(".")) + ".pts";
         FILE *tmp = fopen(pts.c_str(), "r");
         assert(tmp);
@@ -69,8 +111,11 @@ void genTxt(const string &inTxt, const string &outTxt) {
         }
         fclose(tmp);
 
-        Mat img = imread(img_path, CV_LOAD_IMAGE_GRAYSCALE);
-        Rect bbox = getBBox(img, gt_shape);
+        Mat img = imread(img_path);
+       // Mat img = imread(img_path, CV_LOAD_IMAGE_GRAYSCALE);
+		vector<FaceInfo> faceInfo = detector.Detect(img, minSize, thresholds, factor, 3);
+		Rect bbox = getBBox(img,faceInfo,gt_shape);
+        //Rect bbox = getBBox(img, gt_shape);
 
         if (bbox.x != -1) {
             N++;
@@ -92,8 +137,8 @@ void genTxt(const string &inTxt, const string &outTxt) {
 int prepare(void) {
     Config &params = Config::GetInstance();
     string txt = params.dataset + "/Path_Images_train.txt";
-    genTxt(txt, params.dataset + "/train.txt");
+    genTxt(txt, params.dataset + "/train_mtcnn.txt");
     txt = params.dataset + "/Path_Images_test.txt";
-    genTxt(txt, params.dataset + "/test.txt");
+    genTxt(txt, params.dataset + "/test_mtcnn.txt");
     return 0;
 }

@@ -9,8 +9,8 @@ int train(int);
 int test(void);
 int prepare(void);
 int run(void);
-int runVideo(void);
-int runVideo(int k);
+
+
 int main(int argc, char **argv) {
     if (argc != 2) {
         LOG("We need an argument");
@@ -33,9 +33,6 @@ int main(int argc, char **argv) {
     }
     if (strcmp(argv[1], "run") == 0) {
         return run();
-    }
-    if(strcmp(argv[1],"video") == 0){
-        return runVideo();
     }
     else {
         LOG("Wrong Arguments.");
